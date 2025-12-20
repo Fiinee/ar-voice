@@ -13,15 +13,74 @@ const PROMPTS = {
   back: "Ты Бекендини Кодини, голосовой помощник по бэкенд-разработке. Ты объясняешь сложные вещи простыми словами. Объясняй алгоритмами, а не кодом."
 };
 
-app.post("/ask", async (req, res) => {
+
+app.post("/ask", upload.single("audio"), async (req, res) => {
   try {
-    const assistantId = req.body.assistant || "frontik";
-    const systemPrompt = PROMPTS[assistantId];
+    if (!req.file) {
+  return res.status(400).send("Нет аудио файла");
+}
+    const assistantId = req.body.assistant;
+    const systemPrompt = PROMPTS[assistantId] || PROMPTS.frontik;
+    console.log("assistant:", assistantId);
+    console.log("prompt:", systemPrompt);
 
-    console.log("GPT REQUEST START");
 
-    const response = await fetch(
-      "https://api.openai.com/v1/chat/completions",
+    const whisperForm = new FormData();
+    whisperForm.append(
+      "file",
+      fs.createReadStream(req.file.path)
+    );
+    whisperForm.append("model", "whisper-1");
+
+    const whisperResponse = await fetch(
+      "https://api.openai.com/v1/audio/transcriptions",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`
+        },
+        body: whisperForm
+      }
+    );
+
+    const whisperData = await whisperResponse.json();
+    const userText = whisperData.text;
+
+    console.log("Пользователь сказал:", userText);
+
+    const chatResponse = await fetch(
+  "https://api.openai.com/v1/chat/completions",
+  {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${process.env.OPENAI_API_KEY}`
+    },
+    body: JSON.stringify({
+      model: "gpt-3.5-turbo",
+      messages: [
+        {
+          role: "system",
+          content: systemPrompt
+        },
+        {
+          role: "user",
+          content: userText
+        }
+      ]
+    })
+  }
+);
+
+
+    const chatData = await chatResponse.json();
+    const answerText =
+      chatData.choices[0].message.content;
+
+    console.log("Ответ ассистента:", answerText);
+
+    const ttsResponse = await fetch(
+      "https://api.openai.com/v1/audio/speech",
       {
         method: "POST",
         headers: {
@@ -29,29 +88,27 @@ app.post("/ask", async (req, res) => {
           Authorization: `Bearer ${process.env.OPENAI_API_KEY}`
         },
         body: JSON.stringify({
-          model: "gpt-3.5-turbo",
-          max_tokens: 100,
-          messages: [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: "Привет, расскажи что ты умеешь" }
-          ]
+          model: "gpt-4o-mini-tts",
+          voice: "alloy",
+          input: answerText
         })
       }
     );
 
-    const data = await response.json();
-    const answer = data.choices[0].message.content;
+    const audioBuffer = Buffer.from(
+      await ttsResponse.arrayBuffer()
+    );
 
-    console.log("GPT ANSWER READY");
+    res.set("Content-Type", "audio/mpeg");
+    res.send(audioBuffer);
 
-    res.json({ text: answer });
 
-  } catch (e) {
-    console.error(e);
-    res.status(500).send("error");
+    fs.unlinkSync(req.file.path);
+  } catch (err) {
+    console.error(err);
+    res.status(500).send("Ошибка сервера");
   }
 });
-
 
 app.get("/", (req, res) => {
   res.send("AR Voice Server работает");
