@@ -42,8 +42,21 @@ app.post("/ask", async (req, res) => {
       }
     );
 
-    const data = await response.json();
-    const answer = data.choices[0].message.content;
+   const data = await response.json();
+
+console.log("OPENAI RAW RESPONSE:");
+console.log(JSON.stringify(data, null, 2));
+
+if (!data.choices || !data.choices[0]) {
+  console.error("No choices returned from OpenAI");
+  return res.status(500).json({
+    error: "OpenAI returned no choices",
+    raw: data
+  });
+}
+
+const answer = data.choices[0].message.content;
+
 
     console.log("GPT ANSWER READY");
 
