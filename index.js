@@ -5,6 +5,8 @@ import fs from "fs";
 import FormData from "form-data";
 
 const app = express();
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 const upload = multer({ dest: "uploads/" });
 
 const PROMPTS = {
