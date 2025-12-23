@@ -24,7 +24,7 @@ app.post("/ask", async (req, res) => {
     console.log("GPT REQUEST START");
 
     const response = await fetch(
-      "https://api.openai.com/v1/chat/completions",
+      "https://openrouter.ai/api/v1/chat/completions",
       {
         method: "POST",
         headers: {
